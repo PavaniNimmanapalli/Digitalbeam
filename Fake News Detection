@@ -1,0 +1,71 @@
+import pandas as pd
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.pipeline import Pipeline
+from sklearn.base import TransformerMixin
+from sklearn.preprocessing import LabelEncoder
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
+from nltk.tokenize import word_tokenize
+import re
+
+# Load the dataset
+fake_news_data = pd.read_csv("path_to_fake_news_dataset.csv")
+
+# Preprocessing
+class TextPreprocessor(TransformerMixin):
+    def __init__(self):
+        self.stop_words = set(stopwords.words('english'))
+        self.stemmer = PorterStemmer()
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X_transformed = []
+        for text in X:
+            text = re.sub(r'\W', ' ', str(text))  # remove non-word characters
+            text = re.sub(r'\s+[a-zA-Z]\s+', ' ', text)  # remove single characters
+            text = re.sub(r'\^[a-zA-Z]\s+', ' ', text)  # remove single characters from start
+            text = re.sub(r'\s+', ' ', text, flags=re.I)  # substitute multiple spaces with single space
+            text = text.lower()  # convert to lowercase
+            text = [self.stemmer.stem(word) for word in word_tokenize(text) if word not in self.stop_words]  # remove stopwords and stem
+            text = ' '.join(text)
+            X_transformed.append(text)
+        return X_transformed
+
+# Feature Engineering
+tfidf_vectorizer = TfidfVectorizer(max_features=5000)
+
+# Model Building
+pipeline = Pipeline([
+    ('preprocessor', TextPreprocessor()),
+    ('tfidf', tfidf_vectorizer),
+    ('classifier', RandomForestClassifier())
+])
+
+# Encode labels
+label_encoder = LabelEncoder()
+fake_news_data['label_encoded'] = label_encoder.fit_transform(fake_news_data['label'])
+
+# Splitting the dataset
+X_train, X_test, y_train, y_test = train_test_split(fake_news_data['text'], fake_news_data['label_encoded'], test_size=0.2, random_state=42)
+
+# Training the model
+pipeline.fit(X_train, y_train)
+
+# Evaluation
+y_pred = pipeline.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
